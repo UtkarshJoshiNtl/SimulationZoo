@@ -12,6 +12,18 @@ struct Commit {
     std::vector<std::string> files;
 };
 
+static std::string read_file(const std::string& path) {
+    FILE* fp = fopen(path.c_str(), "rb");
+    if (!fp) return "";
+    std::string r;
+    char buf[4096];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof(buf), fp)) > 0)
+        r.append(buf, n);
+    fclose(fp);
+    return r;
+}
+
 static bool files_match(const std::string& a, const std::string& b) {
     FILE* fa = fopen(a.c_str(), "rb");
     FILE* fb = fopen(b.c_str(), "rb");
@@ -473,12 +485,113 @@ static int cmd_status() {
     return 0;
 }
 
+// --- Merge / Rebase ---
+
+static int cmd_merge(const std::string& branch) {
+    std::string cur_name = read_head();
+    if (cur_name.empty()) { printf("Not on a branch\n"); return 1; }
+    int cur_id = read_branch_commit(cur_name);
+    if (cur_id < 0) { printf("No commits on current branch\n"); return 1; }
+    if (branch == cur_name) { printf("Cannot merge branch into itself\n"); return 1; }
+    int other_id = read_branch_commit(branch);
+    if (other_id < 0) { printf("Branch not found: %s\n", branch.c_str()); return 1; }
+    if (other_id == 0) { printf("Nothing to merge\n"); return 1; }
+    Commit cur = parse_commit(cur_id);
+    Commit other = parse_commit(other_id);
+    std::vector<std::string> merged = cur.files;
+    bool conflict = false;
+    for (const auto& f : other.files) {
+        bool in_cur = std::find(cur.files.begin(), cur.files.end(), f) != cur.files.end();
+        if (!in_cur) {
+            std::string src = obj_path(other_id, f);
+            FILE* s = fopen(src.c_str(), "r");
+            FILE* d = fopen(f.c_str(), "w");
+            if (s && d) { int ch; while ((ch = fgetc(s)) != EOF) fputc(ch, d); }
+            if (s) fclose(s);
+            if (d) fclose(d);
+            merged.push_back(f);
+            printf("Added: %s\n", f.c_str());
+        } else {
+            std::string cur_path = obj_path(cur_id, f);
+            std::string other_path = obj_path(other_id, f);
+            if (!files_match(cur_path, other_path)) {
+                std::string cur_c = read_file(cur_path);
+                std::string other_c = read_file(other_path);
+                FILE* d = fopen(f.c_str(), "w");
+                if (d) {
+                    fprintf(d, "<<<<<<< %s\n", cur_name.c_str());
+                    fputs(cur_c.c_str(), d);
+                    fprintf(d, "=======\n");
+                    fputs(other_c.c_str(), d);
+                    fprintf(d, ">>>>>>> %s\n", branch.c_str());
+                    fclose(d);
+                }
+                conflict = true;
+                printf("Conflict: %s\n", f.c_str());
+            }
+        }
+    }
+    write_staging(merged);
+    std::string msg = "Merge branch '" + branch + "' into " + cur_name;
+    cmd_commit(msg);
+    if (conflict)
+        printf("\nConflicts remain - edit files and commit to resolve\n");
+    return 0;
+}
+
+static int cmd_rebase(const std::string& branch) {
+    std::string cur_name = read_head();
+    if (cur_name.empty()) { printf("Not on a branch\n"); return 1; }
+    int cur_id = read_branch_commit(cur_name);
+    if (cur_id < 0) { printf("No commits on current branch\n"); return 1; }
+    if (branch == cur_name) { printf("Cannot rebase onto itself\n"); return 1; }
+    int base_id = read_branch_commit(branch);
+    if (base_id < 0) { printf("Branch not found: %s\n", branch.c_str()); return 1; }
+    if (base_id == 0) { printf("Target branch has no commits\n"); return 1; }
+    if (cur_id == base_id) { printf("Already up to date\n"); return 0; }
+    Commit base = parse_commit(base_id);
+    Commit cur = parse_commit(cur_id);
+    restore_files(base);
+    for (const auto& f : cur.files) {
+        bool in_base = std::find(base.files.begin(), base.files.end(), f) != base.files.end();
+        if (!in_base) {
+            std::string src = obj_path(cur_id, f);
+            FILE* s = fopen(src.c_str(), "r");
+            FILE* d = fopen(f.c_str(), "w");
+            if (s && d) { int ch; while ((ch = fgetc(s)) != EOF) fputc(ch, d); }
+            if (s) fclose(s);
+            if (d) fclose(d);
+        } else {
+            std::string cur_path = obj_path(cur_id, f);
+            std::string base_path = obj_path(base_id, f);
+            if (!files_match(cur_path, base_path)) {
+                FILE* s = fopen(cur_path.c_str(), "r");
+                FILE* d = fopen(f.c_str(), "w");
+                if (s && d) { int ch; while ((ch = fgetc(s)) != EOF) fputc(ch, d); }
+                if (s) fclose(s);
+                if (d) fclose(d);
+            }
+        }
+    }
+    std::vector<std::string> rebased;
+    for (const auto& f : base.files) {
+        if (std::find(cur.files.begin(), cur.files.end(), f) == cur.files.end())
+            rebased.push_back(f);
+    }
+    for (const auto& f : cur.files) rebased.push_back(f);
+    write_staging(rebased);
+    std::string msg = "Rebased onto " + branch;
+    cmd_commit(msg);
+    printf("Rebased %s onto %s\n", cur_name.c_str(), branch.c_str());
+    return 0;
+}
+
 // --- Main ---
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         printf("Usage: cjit <command>\n"
-               "Commands: init, add, rm, commit, log, diff, branch, checkout, status\n");
+               "Commands: init, add, rm, commit, log, diff, branch, checkout, status, merge, rebase\n");
         return 1;
     }
     std::string cmd = argv[1];
@@ -518,6 +631,14 @@ int main(int argc, char* argv[]) {
         return cmd_checkout(argv[2]);
     }
     if (cmd == "status") return cmd_status();
+    if (cmd == "merge") {
+        if (argc < 3) { printf("Usage: cjit merge <branch>\n"); return 1; }
+        return cmd_merge(argv[2]);
+    }
+    if (cmd == "rebase") {
+        if (argc < 3) { printf("Usage: cjit rebase <branch>\n"); return 1; }
+        return cmd_rebase(argv[2]);
+    }
     fprintf(stderr, "Unknown command: %s\n", cmd.c_str());
     return 1;
 }

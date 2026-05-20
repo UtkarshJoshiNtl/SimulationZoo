@@ -22,6 +22,8 @@ g++ -Wall -o cjit cjit.cpp
 | `cjit branch -d <name>` | Delete a branch |
 | `cjit checkout <branch\|id>` | Switch branch or restore commit |
 | `cjit status` | Show repository state |
+| `cjit merge <branch>` | Merge a branch into the current branch |
+| `cjit rebase <branch>` | Rebase current branch onto another |
 
 ## Storage
 
@@ -32,4 +34,20 @@ g++ -Wall -o cjit cjit.cpp
   staging.txt       staged file list
   branches.txt      branch pointers (name|commit_id)
   objects/          file snapshots per commit
+
+## Merge & Rebase
+
+`cjit merge <branch>` combines the specified branch into the current one.
+Conflicting files get standard markers:
+
+```
+<<<<<<< current-branch
+content from current branch
+=======
+content from merging branch
+>>>>>>> other-branch
+```
+
+`cjit rebase <branch>` replays the current branch's changes onto the target
+branch's tip.
 ```
