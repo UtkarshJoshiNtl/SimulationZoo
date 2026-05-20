@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 struct Commit {
     int id;
@@ -10,8 +11,8 @@ struct Commit {
 };
 
 void init_repo() {
-    system("mkdir .cjit");
-    system("mkdir .cjit/objects");
+    mkdir(".cjit", 0755);
+    mkdir(".cjit/objects", 0755);
     FILE *f1 = fopen(".cjit/commits.txt", "w");
     FILE *f2 = fopen(".cjit/staging.txt", "w");
     FILE *f3 = fopen(".cjit/branches.txt", "w");
@@ -78,7 +79,7 @@ int main(int argc, char *argv[]) {
         char staged_file[128];
         FILE *staging = fopen(".cjit/staging.txt", "r");
         while (fgets(staged_file, 128, staging) && c.file_count < 10) {
-            staged_file[strlen(staged_file)-1] = '\0';
+            staged_file[strcspn(staged_file, "\n")] = '\0';
             strcpy(c.files[c.file_count], staged_file);
             c.file_count++;
             fprintf(commits, "%s,", staged_file);
@@ -101,7 +102,33 @@ int main(int argc, char *argv[]) {
         FILE *clear = fopen(".cjit/staging.txt", "w");
         fclose(clear);
         printf("Committed: %s (id: %d, files: %d)\n", c.message, c.id, c.file_count);
-        commit_id++;
+
+        // Update current branch pointer to this commit
+        char head_branch[100];
+        FILE *hfp = fopen(".cjit/HEAD", "r");
+        if (hfp) {
+            fgets(head_branch, 100, hfp);
+            head_branch[strcspn(head_branch, "\n")] = '\0';
+            fclose(hfp);
+            FILE *bfp = fopen(".cjit/branches.txt", "r");
+            FILE *tmp = fopen(".cjit/branches.tmp", "w");
+            char bline[256];
+            while (fgets(bline, 256, bfp)) {
+                char bname[100];
+                int bid;
+                if (sscanf(bline, "%[^|]|%d", bname, &bid) == 2) {
+                    if (strcmp(bname, head_branch) == 0) {
+                        fprintf(tmp, "%s|%d\n", bname, c.id);
+                    } else {
+                        fputs(bline, tmp);
+                    }
+                }
+            }
+            fclose(bfp);
+            fclose(tmp);
+            remove(".cjit/branches.txt");
+            rename(".cjit/branches.tmp", ".cjit/branches.txt");
+        }
     } else if (strcmp(argv[1], "log") == 0) {
         FILE *commits = fopen(".cjit/commits.txt", "r");
         if (!commits) {
@@ -119,10 +146,10 @@ int main(int argc, char *argv[]) {
                 char *second_pipe = strchr(first_pipe + 1, '|');
                 if (second_pipe) {
                     *second_pipe = '\0';
-                    sscanf(line, "%d|%99s", &id, msg);
+                    sscanf(line, "%d|%99[^\n]", &id, msg);
                     *second_pipe = '|'; // restore for potential reuse
                 } else {
-                    sscanf(line, "%d|%99s", &id, msg);
+                    sscanf(line, "%d|%99[^\n]", &id, msg);
                 }
             }
             printf("  Commit %d: %s\n", id, msg);
@@ -196,7 +223,12 @@ int main(int argc, char *argv[]) {
                     int file_diff = 0;
 
                     printf("\n--- %s ---\n", files1[i]);
-                    while (fgets(line1, 256, f1) || fgets(line2, 256, f2)) {
+                    while (1) {
+                        char *r1 = fgets(line1, 256, f1);
+                        char *r2 = fgets(line2, 256, f2);
+                        if (!r1 && !r2) break;
+                        if (!r1) line1[0] = '\0';
+                        if (!r2) line2[0] = '\0';
                         if (strcmp(line1, line2) != 0) {
                             printf("Line %d:\n", line_num);
                             printf("  [%d] %s", id1, line1);
@@ -205,8 +237,6 @@ int main(int argc, char *argv[]) {
                             total_diffs = 1;
                         }
                         line_num++;
-                        memset(line1, 0, 256);
-                        memset(line2, 0, 256);
                     }
 
                     if (!file_diff) {
@@ -227,8 +257,31 @@ int main(int argc, char *argv[]) {
             printf("Usage: cjit branch <name>\n");
             return 1;
         }
+        int branch_start = 0;
+        FILE *hfp = fopen(".cjit/HEAD", "r");
+        if (hfp) {
+            char cur_branch[100];
+            fgets(cur_branch, 100, hfp);
+            cur_branch[strcspn(cur_branch, "\n")] = '\0';
+            fclose(hfp);
+            FILE *bfp = fopen(".cjit/branches.txt", "r");
+            if (bfp) {
+                char bline[256];
+                while (fgets(bline, 256, bfp)) {
+                    char bname[100];
+                    int bid;
+                    if (sscanf(bline, "%[^|]|%d", bname, &bid) == 2) {
+                        if (strcmp(bname, cur_branch) == 0) {
+                            branch_start = bid;
+                            break;
+                        }
+                    }
+                }
+                fclose(bfp);
+            }
+        }
         FILE *branches = fopen(".cjit/branches.txt", "a");
-        fprintf(branches, "%s|0\n", argv[2]);
+        fprintf(branches, "%s|%d\n", argv[2], branch_start);
         fclose(branches);
         printf("Created branch: %s\n", argv[2]);
     } else if (strcmp(argv[1], "status") == 0) {
@@ -279,7 +332,7 @@ int main(int argc, char *argv[]) {
                     char *second_pipe = strchr(first_pipe + 1, '|');
                     if (second_pipe) {
                         *second_pipe = '\0';
-                        sscanf(last_commit, "%d|%99s", &id, msg);
+                        sscanf(last_commit, "%d|%99[^\n]", &id, msg);
                         printf("Last commit: %d - %s\n", id, msg);
                     }
                 }
@@ -392,11 +445,17 @@ int main(int argc, char *argv[]) {
             }
             fclose(commits);
             if (found) {
+                FILE *head = fopen(".cjit/HEAD", "w");
+                fprintf(head, "%d", commit_id);
+                fclose(head);
                 printf("Checked out commit: %d\n", commit_id);
             } else {
                 printf("Branch or commit not found: %s\n", argv[2]);
             }
         }
+    } else {
+        fprintf(stderr, "Unknown command: %s\n", argv[1]);
+        return 1;
     }
 
     return 0;
