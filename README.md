@@ -1,31 +1,35 @@
-# cjit - A simple version control system
+# cjit — a minimal VCS
 
-A minimal git-like VCS written in C.
+A simple version control system written in C++. Inspired by git.
 
-## Building
+## Build
 
 ```sh
-gcc -Wall -o cjit cjit.c
+g++ -Wall -o cjit cjit.cpp
 ```
 
 ## Usage
 
 | Command | Description |
 |---------|-------------|
-| `cjit init` | Initialize a new repository |
-| `cjit add <file>` | Stage a file for commit |
-| `cjit commit <message>` | Commit staged files with a message |
-| `cjit log` | Show commit history |
-| `cjit diff <id1> <id2>` | Show line-by-line differences between commits |
-| `cjit branch <name>` | Create a new branch from the current position |
-| `cjit checkout <branch>` | Switch to an existing branch |
-| `cjit checkout <id>` | Restore files from a specific commit |
-| `cjit status` | Show current branch, staged files, and last commit |
+| `cjit init` | Initialize a repository |
+| `cjit add <file>` | Stage a file |
+| `cjit rm <file>` | Unstage a file |
+| `cjit commit <message>` | Commit staged files |
+| `cjit log [--oneline]` | Show commit history |
+| `cjit diff [<id1> <id2>]` | Diff commits or working tree |
+| `cjit branch [<name>]` | List or create branches |
+| `cjit branch -d <name>` | Delete a branch |
+| `cjit checkout <branch\|id>` | Switch branch or restore commit |
+| `cjit status` | Show repository state |
 
-## Structure
+## Storage
 
-- `.cjit/commits.txt` — commit history (id|message|files)
-- `.cjit/staging.txt` — staged file list
-- `.cjit/branches.txt` — branch name and commit pointer
-- `.cjit/HEAD` — current branch or commit
-- `.cjit/objects/` — file snapshots per commit
+```
+.cjit/
+  HEAD              current branch or commit
+  commits.txt       commit log (id|message|files)
+  staging.txt       staged file list
+  branches.txt      branch pointers (name|commit_id)
+  objects/          file snapshots per commit
+```
