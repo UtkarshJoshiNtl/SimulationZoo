@@ -231,6 +231,11 @@ static int cmd_add(const std::string& file) {
     FILE* fp = fopen(file.c_str(), "r");
     if (!fp) { printf("Error: cannot open %s\n", file.c_str()); return 1; }
     fclose(fp);
+    auto staged = read_staging();
+    if (std::find(staged.begin(), staged.end(), file) != staged.end()) {
+        printf("Already staged: %s\n", file.c_str());
+        return 1;
+    }
     fp = fopen(".cjit/staging.txt", "a");
     if (!fp) return 1;
     fprintf(fp, "%s\n", file.c_str());
@@ -257,6 +262,14 @@ static int cmd_commit(const std::string& msg) {
     if (staged.empty()) {
         printf("Nothing to commit\n");
         return 1;
+    }
+    for (const auto& f : staged) {
+        FILE* check = fopen(f.c_str(), "r");
+        if (!check) {
+            printf("Error: cannot read '%s' (deleted after staging)\n", f.c_str());
+            return 1;
+        }
+        fclose(check);
     }
     int id = get_last_commit_id() + 1;
     FILE* fp = fopen(".cjit/commits.txt", "a");
@@ -372,8 +385,13 @@ static int cmd_branch_create(const std::string& name) {
     std::string head = read_head();
     int bid = read_branch_commit(head);
     if (bid < 0) {
-        printf("Cannot create branch in detached HEAD\n");
-        return 1;
+        char* end;
+        long id = strtol(head.c_str(), &end, 10);
+        if (*end != '\0' || id <= 0) {
+            printf("Unknown HEAD state\n");
+            return 1;
+        }
+        bid = (int)id;
     }
     if (read_branch_commit(name) >= 0) {
         printf("Branch already exists: %s\n", name.c_str());
