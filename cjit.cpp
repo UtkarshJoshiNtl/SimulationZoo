@@ -70,7 +70,7 @@ static int read_branch_commit(const std::string& name) {
     while (fgets(line, sizeof(line), fp)) {
         char bname[256];
         int id;
-        if (sscanf(line, "%[^|]|%d", bname, &id) == 2 && name == bname) {
+        if (sscanf(line, "%255[^|]|%d", bname, &id) == 2 && name == bname) {
             fclose(fp);
             return id;
         }
@@ -88,7 +88,7 @@ static void update_branch_commit(const std::string& branch, int commit_id) {
     while (fgets(line, sizeof(line), fp)) {
         char bname[256];
         int id;
-        if (sscanf(line, "%[^|]|%d", bname, &id) == 2) {
+        if (sscanf(line, "%255[^|]|%d", bname, &id) == 2) {
             if (bname == branch)
                 fprintf(tmp, "%s|%d\n", branch.c_str(), commit_id);
             else
@@ -376,7 +376,7 @@ static int cmd_branch_list() {
     while (fgets(line, sizeof(line), fp)) {
         char name[256];
         int id;
-        if (sscanf(line, "%[^|]|%d", name, &id) == 2) {
+        if (sscanf(line, "%255[^|]|%d", name, &id) == 2) {
             if (name == cur)
                 printf("* %s (%d)\n", name, id);
             else
@@ -425,7 +425,7 @@ static int cmd_branch_delete(const std::string& name) {
     while (fgets(line, sizeof(line), fp)) {
         char bname[256];
         int bid;
-        if (sscanf(line, "%[^|]|%d", bname, &bid) == 2) {
+        if (sscanf(line, "%255[^|]|%d", bname, &bid) == 2) {
             if (bname == name) { found = true; continue; }
             branches.push_back({bname, bid});
         }
