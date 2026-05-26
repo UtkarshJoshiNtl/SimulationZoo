@@ -363,12 +363,20 @@ static int cmd_diff(int id1, int id2) {
     printf("Diff between commit %d and commit %d:\n", id1, id2);
     int total = 0;
     for (const auto& f1 : c1.files) {
-        for (const auto& f2 : c2.files) {
-            if (f1 == f2) {
-                std::string p1 = obj_path(id1, f1);
-                std::string p2 = obj_path(id2, f2);
-                total += diff_files(p1, p2, std::to_string(id1), std::to_string(id2), f1);
-            }
+        auto it = std::find(c2.files.begin(), c2.files.end(), f1);
+        if (it != c2.files.end()) {
+            std::string p1 = obj_path(id1, f1);
+            std::string p2 = obj_path(id2, *it);
+            total += diff_files(p1, p2, std::to_string(id1), std::to_string(id2), f1);
+        } else {
+            printf("  Only in commit %d: %s\n", id1, f1.c_str());
+            total++;
+        }
+    }
+    for (const auto& f2 : c2.files) {
+        if (std::find(c1.files.begin(), c1.files.end(), f2) == c1.files.end()) {
+            printf("  Only in commit %d: %s\n", id2, f2.c_str());
+            total++;
         }
     }
     if (!total) printf("  No differences\n");
