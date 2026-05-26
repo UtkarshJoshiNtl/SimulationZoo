@@ -218,9 +218,14 @@ static int cmd_init() {
     }
     mkdir(".cjit", 0755);
     mkdir(".cjit/objects", 0755);
-    FILE* f = fopen(".cjit/commits.txt", "w"); fclose(f);
-    f = fopen(".cjit/staging.txt", "w"); fclose(f);
+    FILE* f = fopen(".cjit/commits.txt", "w");
+    if (!f) { perror("Failed to create commits.txt"); return 1; }
+    fclose(f);
+    f = fopen(".cjit/staging.txt", "w");
+    if (!f) { perror("Failed to create staging.txt"); return 1; }
+    fclose(f);
     f = fopen(".cjit/branches.txt", "w");
+    if (!f) { perror("Failed to create branches.txt"); return 1; }
     fprintf(f, "main|0\n"); fclose(f);
     write_head("main");
     printf("Initialized empty CJIT repository\n");
