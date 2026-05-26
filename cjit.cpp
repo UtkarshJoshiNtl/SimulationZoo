@@ -489,7 +489,16 @@ static int cmd_checkout(const std::string& target) {
 static int cmd_status() {
     std::string head = read_head();
     if (head.empty()) { printf("Not a repository\n"); return 1; }
-    printf("On branch: %s\n", head.c_str());
+    if (read_branch_commit(head) < 0) {
+        char* end;
+        long head_id = strtol(head.c_str(), &end, 10);
+        if (*end == '\0' && head_id > 0)
+            printf("(detached HEAD at commit %ld)\n", head_id);
+        else
+            printf("(detached HEAD: %s)\n", head.c_str());
+    } else {
+        printf("On branch: %s\n", head.c_str());
+    }
     auto staged = read_staging();
     printf("Staged files:\n");
     if (staged.empty())
