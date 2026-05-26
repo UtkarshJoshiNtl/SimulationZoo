@@ -296,13 +296,14 @@ static int cmd_commit(const std::string& msg) {
         while ((ch = fgetc(src)) != EOF) fputc(ch, dst);
         fclose(src); fclose(dst);
     }
-    fclose(fopen(".cjit/staging.txt", "w"));
     std::string head = read_head();
     int bid = read_branch_commit(head);
     if (bid >= 0)
         update_branch_commit(head, id);
     else
         write_head(std::to_string(id));
+    FILE* sf = fopen(".cjit/staging.txt", "w");
+    if (sf) fclose(sf);
     printf("Committed: %s (id: %d, files: %zu)\n", msg.c_str(), id, staged.size());
     return 0;
 }
