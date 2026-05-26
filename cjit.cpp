@@ -335,12 +335,19 @@ static int cmd_diff_working() {
     int last = get_last_commit_id();
     if (last == 0) { printf("No commits\n"); return 1; }
     Commit c = parse_commit(last);
-    if (c.files.empty()) { printf("No files in last commit\n"); return 1; }
     printf("Diff between commit %d and working tree:\n", last);
     int total = 0;
     for (const auto& f : c.files) {
         std::string op = obj_path(last, f);
         total += diff_files(op, f, std::to_string(last), "wt", f);
+    }
+    auto staged = read_staging();
+    for (const auto& f : staged) {
+        if (std::find(c.files.begin(), c.files.end(), f) == c.files.end()) {
+            printf("\n--- %s ---\n", f.c_str());
+            printf("  New file in working tree: %s (not yet committed)\n", f.c_str());
+            total++;
+        }
     }
     if (!total) printf("  No differences\n");
     return 0;
