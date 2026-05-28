@@ -12,6 +12,9 @@ struct Commit {
     std::vector<std::string> files;
 };
 
+// Flat-file format: "id|message|file1,file2,...\n"
+// Each file is stored as .cjit/objects/<id>_<filename>
+
 static std::string read_file(const std::string& path) {
     FILE* fp = fopen(path.c_str(), "rb");
     if (!fp) return "";
@@ -114,6 +117,10 @@ static int get_last_commit_id() {
     return last;
 }
 
+// Parse a commit from commits.txt by its numeric ID.
+// Format: "id|message|file1,file2,..."
+// Temporarily replaces the second '|' with '\0' to isolate the message field,
+// then restores it before tokenizing the file list.
 static Commit parse_commit(int id) {
     Commit c;
     c.id = id;
@@ -179,6 +186,8 @@ static void write_staging(const std::vector<std::string>& files) {
     fclose(fp);
 }
 
+// Line-by-line comparison. Unlike Myers diff, this only detects differing
+// lines at the same position — insertions/deletions shift subsequent lines.
 static int diff_files(const std::string& path_a, const std::string& path_b,
                       const std::string& label_a, const std::string& label_b,
                       const std::string& display) {
