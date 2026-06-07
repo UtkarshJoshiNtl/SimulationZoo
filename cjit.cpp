@@ -588,11 +588,13 @@ static int cmd_merge(const std::string& branch) {
             }
         }
     }
-    write_staging(merged);
     std::string msg = "Merge branch '" + branch + "' into " + cur_name;
+    if (conflict) {
+        printf("\nConflicts remain - resolve them and run 'cjit commit \"%s\"' to complete the merge\n", msg.c_str());
+        return 0;
+    }
+    write_staging(merged);
     cmd_commit(msg);
-    if (conflict)
-        printf("\nConflicts remain - edit files and commit to resolve\n");
     return 0;
 }
 
