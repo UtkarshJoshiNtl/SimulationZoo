@@ -117,10 +117,6 @@ static int get_last_commit_id() {
     return last;
 }
 
-// Parse a commit from commits.txt by its numeric ID.
-// Format: "id|message|file1,file2,..."
-// Temporarily replaces the second '|' with '\0' to isolate the message field,
-// then restores it before tokenizing the file list.
 static Commit parse_commit(int id) {
     Commit c;
     c.id = id;
@@ -130,16 +126,15 @@ static Commit parse_commit(int id) {
     while (fgets(line, sizeof(line), fp)) {
         int lid;
         if (sscanf(line, "%d|", &lid) != 1 || lid != id) continue;
-        char* p = strchr(line, '|');
-        if (!p) continue;
-        p = strchr(p + 1, '|');
-        if (!p) continue;
-        *p = '\0';
-        char* msg = strchr(line, '|') + 1;
-        c.message = msg;
-        *p = '|';
-        p++;
-        char* tok = strtok(p, ",\n");
+        char* first = strchr(line, '|');
+        if (!first) continue;
+        char* last = strrchr(line, '|');
+        if (!last || last == first) continue;
+        *last = '\0';
+        c.message = first + 1;
+        *last = '|';
+        last++;
+        char* tok = strtok(last, ",\n");
         while (tok) {
             c.files.push_back(tok);
             tok = strtok(NULL, ",\n");
@@ -323,14 +318,14 @@ static int cmd_log(bool oneline) {
     printf("Commit history:\n");
     char line[2048];
     while (fgets(line, sizeof(line), fp)) {
-        char* p = strchr(line, '|');
-        if (!p) continue;
-        p = strchr(p + 1, '|');
-        if (!p) continue;
-        *p = '\0';
+        char* first = strchr(line, '|');
+        if (!first) continue;
+        char* last = strrchr(line, '|');
+        if (!last || last == first) continue;
+        *last = '\0';
         int id;
         sscanf(line, "%d", &id);
-        char* msg = strchr(line, '|') + 1;
+        char* msg = first + 1;
         if (oneline)
             printf("  %d: %s\n", id, msg);
         else

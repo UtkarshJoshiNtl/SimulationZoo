@@ -1,3 +1,5 @@
 cjit
 test.sh
+test.txt
 *.o
+.cjit/
