@@ -1,5 +1,12 @@
-cjit
-test.sh
-test.txt
+# Build output
+build/
 *.o
-.cjit/
+*.obj
+
+# Rendered frames (GIFs in gallery/ are committed; raw frames are not)
+out/
+*.ppm
+
+# Editor / OS
+.DS_Store
+*.swp
