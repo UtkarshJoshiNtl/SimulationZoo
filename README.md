@@ -1,97 +1,93 @@
-# cjit
+# Simulation Zoo
 
-**cjit** is a minimal version control system written in C++. It provides a familiar Git-like interface with commands for staging files, committing snapshots, branching, diffing, and merging — all stored in a simple flat-file format.
+> A small collection of deterministic simulations, each with one signature visual.
 
-## Why
+Every exhibit is a self-contained slice of physics — a particle system, a scalar
+field, a flock — paired with a renderer that makes it fun to watch. The code
+underneath is fixed-timestep, seeded, and reproducible: the same run always
+produces the same frames.
 
-cjit is a teaching tool and a lightweight alternative for projects that don't need Git's full object model or network capabilities. It stores history in flat files (no binary packfiles), making it easy to inspect, hack on, and understand. Use it when you want version control that you can fully read and modify.
+This is a zoo, not an engine. The whole point is that adding a new animal is a
+small, boring, well-documented task.
 
-## Quick Start
+## Gallery
 
-```sh
-g++ -Wall -o cjit cjit.cpp
-./cjit init
-echo "hello" > readme.txt
-./cjit add readme.txt
-./cjit commit "initial commit"
-./cjit log
-```
+| Exhibit | Family | What it is |
+|---|---|---|
+| **N-body galaxy** | particle | ![N-body](gallery/nbody.gif)<br>A self-gravitating disk around a central mass, integrated with leapfrog. Speed-coloured trails. |
+| **Gray-Scott** | field | ![Gray-Scott](gallery/grayscott.gif)<br>Reaction-diffusion: two chemicals on a grid producing organic coral. |
+| **Boids** | agent | ![Boids](gallery/boids.gif)<br>Reynolds flocking — separation, alignment, cohesion — on a torus. |
 
-## Building
+The GIFs are generated from the repository, not hand-captured. See
+[`tools/run_all.py`](tools/run_all.py).
 
-**Prerequisites:** A C++ compiler (g++ or clang++), POSIX environment (Linux, macOS, WSL).
-
-```sh
-g++ -Wall -o cjit cjit.cpp
-```
-
-## Usage
-
-### Commands
-
-| Command | Description |
-|---------|-------------|
-| `init` | Initialize a new repository |
-| `add <file>` | Stage a file for commit |
-| `rm <file>` | Unstage a file |
-| `commit <message>` | Commit staged files |
-| `log [--oneline]` | Show commit history |
-| `diff [<id1> <id2>]` | Diff between commits, or last commit vs working tree |
-| `branch` | List branches |
-| `branch <name>` | Create a branch |
-| `branch -d <name>` | Delete a branch |
-| `checkout <branch_or_id>` | Switch branches or restore files from a commit |
-| `status` | Show branch, staged files, and unstaged changes |
-| `merge <branch>` | Merge a branch into the current branch |
-| `rebase <branch>` | Rebase the current branch onto another |
-
-### Example session
+## Quick start
 
 ```sh
-./cjit init
-echo "print('hello')" > main.py
-./cjit add main.py
-./cjit commit "add hello script"
-./cjit branch feature
-./cjit checkout feature
-echo "print('world')" >> main.py
-./cjit commit "add world"
-./cjit checkout main
-./cjit merge feature
-./cjit log --oneline
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+./build/zoo list
+./build/zoo run nbody --frames 300 --out out/nbody
 ```
 
-## Internal Storage
+Then turn the frames into a GIF:
 
-All repository data lives in `.cjit/`:
-
-```
-.cjit/
-├── HEAD              Current branch or detached commit ID
-├── commits.txt       Commit log (id|message|file1,file2,...)
-├── staging.txt       Staged file list (one per line)
-├── branches.txt      Branch pointers (name|commit_id)
-└── objects/          File snapshots (<id>_<filename>)
+```sh
+python3 tools/make_gif.py out/nbody gallery/nbody.gif --fps 20
+# or rebuild every gallery GIF at once:
+python3 tools/run_all.py
 ```
 
-## Merging
-
-`cjit merge <branch>` combines the specified branch into the current one. When the same file differs between branches, conflict markers are written to the working copy for manual resolution:
+## Commands
 
 ```
-<<<<<<< current-branch
-content from current branch
-=======
-content from the merging branch
->>>>>>> other-branch
+zoo list                                   list exhibits
+zoo params <exhibit>                       show an exhibit's tunable parameters
+zoo run <exhibit> [options]                render frames to PPM files
 ```
 
-After resolving conflicts, stage and commit to complete the merge.
+`run` options:
 
-## Rebase
+| Option | Meaning | Default |
+|---|---|---|
+| `--seed N` | deterministic seed | `1` |
+| `--frames N` | number of frames | `300` |
+| `--fps N` | step size is `1/fps` seconds | `60` |
+| `--width W`, `--height H` | image size in pixels | `640` |
+| `--exposure F` | tone-map exposure (additive exhibits) | from params |
+| `--out DIR` | output directory | `out/<exhibit>` |
+| `--param k=v` | override an exhibit parameter (repeatable) | — |
 
-`cjit rebase <branch>` replays the current branch's file state on top of the target branch's tip, creating a new commit. This produces a linear history where the current branch appears to have branched off the target's latest state.
+Example — a bigger, different galaxy:
+
+```sh
+./build/zoo run nbody --seed 42 --frames 600 --param particles=4000 --param trail=0.95
+```
+
+## Requirements
+
+- A C++17 compiler (GCC, Clang, or MSVC) and CMake ≥ 3.16.
+- Python 3 with Pillow for the GIF tooling (only needed to build the gallery).
+
+The core builds and renders on Linux, macOS, and Windows.
+
+## The rules
+
+1. **Deterministic.** Same seed + parameters ⇒ same frames, always.
+2. **Boring to extend.** An exhibit is one file implementing one small
+   interface. The runner never changes.
+3. **Cool first, serious underneath.** If it isn't fun to watch, it doesn't go
+   in. If it isn't honest physics, it doesn't either.
+
+## Documentation
+
+| Document | Read it for |
+|---|---|
+| [`DESIGN.md`](DESIGN.md) | how the system is put together and why |
+| [`EXHIBIT.md`](EXHIBIT.md) | how to add a new exhibit (the recipe) |
+| [`TRUST.md`](TRUST.md) | the reproducibility contract and how to verify it |
+| [`PLAN.md`](PLAN.md) | roadmap: live viewer, sandbox, effects, web |
 
 ## License
 
-MIT
+MIT.
