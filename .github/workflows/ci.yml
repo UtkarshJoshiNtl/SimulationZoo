@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: List exhibits
+        run: ./build/zoo list
+
+      - name: Render each exhibit and check determinism
+        shell: bash
+        run: |
+          set -euo pipefail
+          for ex in $(./build/zoo list | tail -n +2 | awk '{print $1}'); do
+            echo "== $ex =="
+            ./build/zoo run "$ex" --seed 7 --frames 12 --width 128 --height 128 --out "out/$ex-a"
+            ./build/zoo run "$ex" --seed 7 --frames 12 --width 128 --height 128 --out "out/$ex-b"
+            diff -r "out/$ex-a" "out/$ex-b"
+            test -n "$(ls out/$ex-a/frame_*.ppm)"
+          done
+          echo "all exhibits deterministic"
